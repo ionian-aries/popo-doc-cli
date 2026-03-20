@@ -1,4 +1,8 @@
-import { AUTH_API_PATH, API_BASE_URL } from "../constants/index.ts";
+import {
+  AUTH_API_PATH,
+  API_BASE_URL,
+  TOKEN_REFRESH_BUFFER_MS,
+} from "../constants/index.ts";
 import { getLocalConfig, setLocalConfig, log } from "../utils";
 
 let cachedToken: string | null = null;
@@ -6,7 +10,10 @@ let cachedExpiredAt = 0;
 
 export async function getAccessToken(): Promise<string> {
   const now = Date.now();
-  if (cachedToken && cachedExpiredAt > now + 1000) {
+  const buffer = TOKEN_REFRESH_BUFFER_MS;
+
+  // 1. 内存缓存未过期
+  if (cachedToken && cachedExpiredAt > now + buffer) {
     log("Using cached token", { expiresAt: cachedExpiredAt });
     return cachedToken;
   }
@@ -15,10 +22,20 @@ export async function getAccessToken(): Promise<string> {
     const local = await getLocalConfig();
     const token = local.openAccessToken as string;
     const expiresAt = Number(local.accessExpiredAt);
-    cachedToken = token;
-    cachedExpiredAt = expiresAt;
-    return token;
+
+    // 2. 本地 token 未过期（含缓冲）
+    if (expiresAt > now + buffer) {
+      cachedToken = token;
+      cachedExpiredAt = expiresAt;
+      log("Using token from local config", { expiresAt });
+      return token;
+    }
+
+    // 3. 本地 token 已过期或即将过期，自动刷新并写入本地
+    log("Local token expired or about to expire, refreshing", { expiresAt });
+    return getToken();
   } catch {
+    // 4. 本地配置不可用，拉新 token 并写入本地
     return getToken();
   }
 }
@@ -55,7 +72,7 @@ async function getToken(): Promise<string> {
   if (!token) {
     throw new Error("Token response missing openAccessToken");
   }
-  setLocalConfig(payload)
+  await setLocalConfig(payload);
   cachedToken = token;
   cachedExpiredAt = expiresAt;
   log("Token refreshed successfully", { expiresAt: cachedExpiredAt });

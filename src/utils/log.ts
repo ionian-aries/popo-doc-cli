@@ -10,13 +10,13 @@ export function log(
 
 /** 命令失败时统一输出错误结果（不受 DEBUG 控制，始终打印） */
 export function printCommandError(
-  command: "download" | "search" | "url",
+  command: "download" | "search" | "url" | "info",
   args: { json?: boolean; url?: string; query?: string; docId?: string },
   error: unknown
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
   const result: Record<string, unknown> = { success: false, error: errMsg };
-  if (command === "download") {
+  if (command === "download" || command === "info") {
     result.url = args.url ?? "";
   } else if (command === "search") {
     result.searchContent = args.query ?? "";

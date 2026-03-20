@@ -18,6 +18,7 @@ import {
   pollTaskResult,
   docTypeName,
   shareTypeName,
+  pageTypeName,
   printCommandError,
 } from "./utils";
 import {
@@ -47,6 +48,11 @@ type SearchArgs = {
 
 type UrlArgs = {
   docId: string;
+  json?: boolean;
+};
+
+type InfoArgs = {
+  url: string;
   json?: boolean;
 };
 
@@ -178,6 +184,49 @@ async function cmdUrl(args: UrlArgs): Promise<void> {
   }
 }
 
+async function cmdInfo(args: InfoArgs): Promise<void> {
+  const parsed = parseUrl(args.url);
+
+  let detail: Record<string, unknown>;
+
+  if (parsed.type === "personal") {
+    detail = await getPersonalDocDetail(parsed.docId);
+    const docType = Number(detail.docType ?? 0);
+    const shareType = Number(detail.shareType ?? 0);
+    Object.assign(detail, {
+      docTypeName: docTypeName(docType),
+      shareTypeName: shareTypeName(shareType),
+    });
+  } else {
+    detail = await getTeamPageDetail(parsed.teamSpaceKey, parsed.pageId);
+    const pageType = Number(detail.pageType ?? -1);
+    Object.assign(detail, {
+      pageTypeName: pageTypeName(pageType),
+    });
+  }
+
+  const result = {
+    success: true,
+    message: "Document info retrieved successfully",
+    data: {
+      type: parsed.type,
+      originalUrl: args.url,
+      ...detail,
+    },
+  };
+
+  if (args.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const name =
+      parsed.type === "personal"
+        ? String(detail.name ?? "")
+        : String(detail.pageName ?? "");
+    console.log("名称:", name);
+    console.log(JSON.stringify(result, null, 2));
+  }
+}
+
 const program = new Command();
 
 program.name("popo-doc").description("POPO 文档 CLI").version(pkg.version);
@@ -225,6 +274,20 @@ program
       await cmdUrl(args);
     } catch (error) {
       printCommandError("url", args, error);
+    }
+  });
+
+program
+  .command("info")
+  .alias("get-document-info")
+  .description("查询文档/页面详情（支持个人文档与团队空间）")
+  .requiredOption("-u, --url <url>", "POPO 文档 URL")
+  .option("--json", "仅输出 JSON")
+  .action(async (args: InfoArgs) => {
+    try {
+      await cmdInfo(args);
+    } catch (error) {
+      printCommandError("info", args, error);
     }
   });
 

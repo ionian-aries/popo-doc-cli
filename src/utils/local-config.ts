@@ -4,11 +4,15 @@ import { CONFIG_FILENAME } from "../constants/index.ts";
 
 let cachedLocalConfig: Record<string, unknown> | null = null;
 
-function getConfigPath(): string {
+function getHomeDir(): string {
   const home =
     process.env.HOME ?? process.env.USERPROFILE ?? process.env.HOMEPATH ?? "";
   if (!home) throw new Error("无法获取用户主目录");
-  return path.join(home, CONFIG_FILENAME);
+  return home;
+}
+
+function getConfigPath(): string {
+  return path.join(getHomeDir(), CONFIG_FILENAME);
 }
 
 function assertValidTokenConfig(config: Record<string, unknown>): void {
